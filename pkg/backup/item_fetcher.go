@@ -23,7 +23,7 @@ func NewServer(discoveryClient discovery.Helper, dynamicFactory client.DynamicFa
 	}
 }
 
-func (s *server) GeResourcesFromNamespace(namespace string) ([]*unstructured.UnstructuredList, error) {
+func (s *server) GeResourcesFromNamespace(namespace string, listOptions metav1.ListOptions) ([]*unstructured.UnstructuredList, error) {
 	namespaceObjects := []*unstructured.UnstructuredList{}
 
 	for _, apiResourceList := range s.discoveryClient.GetNamespaceScopedAPIResourceList() {
@@ -35,7 +35,7 @@ func (s *server) GeResourcesFromNamespace(namespace string) ([]*unstructured.Uns
 		}
 		for _, apiResource := range apiResourceList.APIResources {
 			dClient, _ := s.dynamicFactory.ClientForGroupVersionResource(gv, apiResource, namespace, context.TODO())
-			objList, err := dClient.List(metav1.ListOptions{})
+			objList, err := dClient.List(listOptions)
 			if err != nil {
 				klog.Errorf("Failed to list resources of %s error: %v", apiResource.Name, err)
 				continue
@@ -49,14 +49,14 @@ func (s *server) GeResourcesFromNamespace(namespace string) ([]*unstructured.Uns
 }
 
 func (s *server) GetResourcesFromGVR(
-	gvr schema.GroupVersionResource, namespace string) (*unstructured.UnstructuredList, error) {
+	gvr schema.GroupVersionResource, namespace string, listOptions metav1.ListOptions) (*unstructured.UnstructuredList, error) {
 	fqGVR, apiResource, err := s.discoveryClient.ResourcesFor(gvr)
 	if err != nil {
 		return nil, err
 	}
 
 	dClient, _ := s.dynamicFactory.ClientForGroupVersionResource(fqGVR.GroupVersion(), apiResource, namespace, context.TODO())
-	objList, err := dClient.List(metav1.ListOptions{})
+	objList, err := dClient.List(listOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -65,14 +65,14 @@ func (s *server) GetResourcesFromGVR(
 }
 
 func (s *server) GetResourcesFromGVK(
-	gvk schema.GroupVersionKind, namespace string) (*unstructured.UnstructuredList, error) {
+	gvk schema.GroupVersionKind, namespace string, listOptions metav1.ListOptions) (*unstructured.UnstructuredList, error) {
 	fqGVR, apiResource, err := s.discoveryClient.KindFor(gvk)
 	if err != nil {
 		return nil, err
 	}
 
 	dClient, _ := s.dynamicFactory.ClientForGroupVersionResource(fqGVR.GroupVersion(), apiResource, namespace, context.TODO())
-	objList, err := dClient.List(metav1.ListOptions{})
+	objList, err := dClient.List(listOptions)
 	if err != nil {
 		return nil, err
 	}

@@ -6,6 +6,7 @@ import (
 	"github.com/mayadata.io/kubera-backup-restore/pkg/backup"
 	"github.com/mayadata.io/kubera-backup-restore/pkg/client"
 	kuberadiscovery "github.com/mayadata.io/kubera-backup-restore/pkg/discovery"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -60,7 +61,15 @@ func main() {
 	// 	return
 	// }
 	// fmt.Printf("%+v\n", objects.Items)
-	objList, err := server.GetResourcesFromGVR(schema.GroupVersionResource{Version: "", Resource: "namespaces"}, "")
+
+	// To convert from LabelSelector to listOption populate listOptions.LabelSelector
+	// Ex: sel, err := metav1.LabelSelectorAsSelector(labelSelector)
+	// if err != nil { //Handle error }
+	// metav1.ListOptions.LabelSelector = sel
+	listOptions := metav1.ListOptions{
+		LabelSelector: "test1=key1",
+	}
+	objList, err := server.GetResourcesFromGVR(schema.GroupVersionResource{Version: "", Resource: "namespaces"}, "", listOptions)
 	if err != nil {
 		fmt.Println("error: ", err)
 		return

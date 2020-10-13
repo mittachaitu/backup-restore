@@ -1,6 +1,8 @@
 package discovery
 
 import (
+	"sync"
+
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,9 +15,8 @@ import (
 
 // Helper contains functions that one needs to interact with API server
 type Helper interface {
-	// GetResources returns the current set of resources retrived
-	// from api server
-	GetResources() []*metav1.APIResourceList
+	// GetAPIResourceList returns the set of resources retrived from api server
+	GetAPIResourceList() []*metav1.APIResourceList
 	// GetNamespaceScopedAPIResourceList returns list of resources
 	// which are namespaced scope
 	GetNamespaceScopedAPIResourceList() []*metav1.APIResourceList
@@ -27,6 +28,8 @@ type Helper interface {
 	// KindFor taked a partially-resolved kind and
 	// returns fully qualified GroupVersionKind and APIResource
 	KindFor(schema.GroupVersionKind) (schema.GroupVersionResource, metav1.APIResource, error)
+	// LoadResources will sync resources from api server to in-memory
+	LoadResources() error
 }
 
 type helper struct {
@@ -38,6 +41,8 @@ type helper struct {
 	versionInfo              *version.Info
 	// Required for shortcut mappings
 	restMapper meta.RESTMapper
+	// lock protects namespaceScopedResources, resources, resourcesMap and kindMap
+	lock sync.RWMutex
 }
 
 // NewHelper returns new instance of helper which can be used to query about
@@ -53,6 +58,8 @@ func NewHelper(discoveryClient discovery.DiscoveryInterface) (Helper, error) {
 }
 
 func (h *helper) LoadResources() error {
+	h.lock.Lock()
+	defer h.lock.Unlock()
 
 	// loadServerGroupAndResourcces returns the supported groups and resources for
 	// all groups and versions
@@ -114,18 +121,30 @@ func loadServerGroupsAndResources(discoveryClient discovery.DiscoveryInterface) 
 }
 
 func (h *helper) GetNamespaceScopedAPIResourceList() []*metav1.APIResourceList {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+
 	return h.namespaceScopedResources
 }
 
-func (h *helper) GetResources() []*metav1.APIResourceList {
+func (h *helper) GetAPIResourceList() []*metav1.APIResourceList {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+
 	return h.resources
 }
 
 func (h *helper) ServerVersionInfo() *version.Info {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+
 	return h.versionInfo
 }
 
 func (h *helper) ResourcesFor(gvr schema.GroupVersionResource) (schema.GroupVersionResource, metav1.APIResource, error) {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+
 	fqGVR, err := h.restMapper.ResourceFor(gvr)
 	if err != nil {
 		return schema.GroupVersionResource{}, metav1.APIResource{}, err
@@ -138,6 +157,9 @@ func (h *helper) ResourcesFor(gvr schema.GroupVersionResource) (schema.GroupVers
 }
 
 func (h *helper) KindFor(gvk schema.GroupVersionKind) (schema.GroupVersionResource, metav1.APIResource, error) {
+	h.lock.RLock()
+	defer h.lock.RUnlock()
+
 	if resource, ok := h.kindMap[gvk]; ok {
 		return schema.GroupVersionResource{
 			Group:    resource.Group,
